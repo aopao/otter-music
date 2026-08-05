@@ -18,6 +18,7 @@ import {
   MessageSquareQuote,
   Link2,
   Check,
+  Folder,
 } from "lucide-react";
 import { ReactNode, useState, useMemo } from "react";
 import { MusicCover } from "./MusicCover";
@@ -34,6 +35,7 @@ import { MusicProviderFactory } from "@/lib/music-provider";
 import { MusicCommentsDrawer } from "./MusicCommentsDrawer";
 import { handleAutoMatch } from "@/lib/audio-match";
 import { getAllVisibleSourcesForSwitch } from "@/hooks/use-aggregated-sources";
+import { parseAlistTrackId } from "@/lib/alist/alist-api";
 import {
   Dialog,
   DialogContent,
@@ -118,7 +120,12 @@ export function MusicTrackMobileMenu({
 
   // 音源切换可用性：仅收藏页、歌单页、或当前正在播放的歌曲允许切换
   const canSwitchSource = useMemo(() => {
-    if (track.source === "local" || track.source === "podcast") return false;
+    if (
+      track.source === "local" ||
+      track.source === "podcast" ||
+      track.source === "alist"
+    )
+      return false;
     const { queue, currentIndex } = useMusicStore.getState();
     if (queue[currentIndex]?.id === track.id) return true;
     const path = location.pathname;
@@ -316,41 +323,66 @@ export function MusicTrackMobileMenu({
               </ActionButton>
             )}
 
-            {/* 除播客外，有歌手即显示歌手入口 */}
-            {track.source !== "podcast" && track.artist?.length > 0 && (
-              <ActionButton
-                icon={User}
-                onClick={() => {
-                  if (track.artist.length > 1) {
-                    setShowArtistSelection(true);
-                  } else {
-                    handleSearch(
-                      track.artist[0],
-                      "artist",
-                      undefined,
-                      track.artist_ids?.[0]
-                    );
-                  }
-                }}
-              >
-                歌手：{track.artist.join(" / ")}
-              </ActionButton>
-            )}
+            {/* 除播客/Alist 外，有歌手即显示歌手入口 */}
+            {track.source !== "podcast" &&
+              track.source !== "alist" &&
+              track.artist?.length > 0 && (
+                <ActionButton
+                  icon={User}
+                  onClick={() => {
+                    if (track.artist.length > 1) {
+                      setShowArtistSelection(true);
+                    } else {
+                      handleSearch(
+                        track.artist[0],
+                        "artist",
+                        undefined,
+                        track.artist_ids?.[0]
+                      );
+                    }
+                  }}
+                >
+                  歌手：{track.artist.join(" / ")}
+                </ActionButton>
+              )}
 
-            {/* 除播客外，有专辑即显示专辑入口 */}
-            {track.source !== "podcast" && track.album && (
+            {/* 除播客/Alist 外，有专辑即显示专辑入口 */}
+            {track.source !== "podcast" &&
+              track.source !== "alist" &&
+              track.album && (
+                <ActionButton
+                  icon={Disc}
+                  onClick={() => {
+                    handleSearch(
+                      track.album!,
+                      "album",
+                      track.artist[0],
+                      track.album_id
+                    );
+                  }}
+                >
+                  专辑：{track.album}
+                </ActionButton>
+              )}
+
+            {/* Alist 音源：专辑入口跳转到所在目录 */}
+            {track.source === "alist" && track.album && (
               <ActionButton
-                icon={Disc}
+                icon={Folder}
                 onClick={() => {
-                  handleSearch(
-                    track.album!,
-                    "album",
-                    track.artist[0],
-                    track.album_id
+                  const parsed = parseAlistTrackId(track.id);
+                  if (!parsed) return;
+                  onOpenChange(false);
+                  onNavigate?.();
+                  navigate(
+                    `/alist/${parsed.serverId}?path=${encodeURIComponent(
+                      track.album
+                    )}`
                   );
                 }}
               >
-                专辑：{track.album}
+                目录：
+                {track.album.split("/").filter(Boolean).pop() || track.album}
               </ActionButton>
             )}
 
